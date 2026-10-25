@@ -1,0 +1,8 @@
+[server]
+port = 8501
+maxUploadSize = 300
+runOnSave = false
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false

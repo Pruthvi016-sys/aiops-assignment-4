@@ -1,0 +1,11 @@
+# Alerts from Prometheus are grouped here and visible at http://localhost:9093
+# add an email / slack / webhook receiver under "receivers" to get notifications
+route:
+  receiver: default
+  group_by: ["alertname", "severity"]
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 1h
+
+receivers:
+  - name: default

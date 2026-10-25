@@ -1,0 +1,126 @@
+# ---------------------------------------------------------------------------
+# AI ATTRIBUTION
+# The PromQL expressions in this file were generated with Claude (Anthropic,
+# model claude-opus-5-5) in one chat session.
+# Prompt used (my original request, together with the assignment PDF):
+#   "write all codes ... Instrument a CPU-bound AI application, configure an
+#    alerting pipeline, and design a production-grade monitoring dashboard ...
+#    follow the rubric"
+# Above every rule: "Generated for" = the requirement the query was generated
+# for, and "Logic" = my own explanation of how the value is calculated.
+# Prompt per rule: AI_prompt_usage.md | hand calculations: METRICS.md
+# ---------------------------------------------------------------------------
+groups:
+  - name: caption_app
+    rules:
+      # Generated for: "alert when the Streamlit app is down"
+      # Logic: Prometheus sets up=1 when the scrape of :8000 works, 0 when it fails.
+      #        Fires if it stays 0 for 15 s (3 scrapes at 5 s interval).
+      - alert: CaptionAppDown
+        expr: up{job="caption_app"} == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Caption app is down"
+          description: "Prometheus could not scrape {{ $labels.instance }} for 15 seconds."
+
+      # Generated for: "alert if the app is up but the model never finished loading"
+      # Logic: gauge set to 1 after from_pretrained() returns.
+      - alert: ModelNotLoaded
+        expr: imgcap_model_loaded == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "BLIP model is not loaded"
+          description: "The app is up but the model has not been loaded for 2 minutes."
+
+      # Generated for: "alert when p95 inference latency per image is above 5 seconds"
+      # Logic: rate(..._bucket[1m]) = images per second landing in each "le" bucket
+      #        over the last minute; sum by (le) merges single+bulk; histogram_quantile
+      #        finds the bucket holding the 95th percentile rank and interpolates
+      #        linearly inside it.
+      - alert: HighInferenceLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(imgcap_inference_seconds_bucket[1m]))) > 5
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 inference latency above 5s"
+          description: "p95 latency per image is {{ $value | printf \"%.2f\" }}s."
+
+      # Generated for: "alert when more than 20% of images fail"
+      # Logic: failed images per second / all images per second over 5 min
+      #        = failed / total in that window (the seconds cancel out).
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(imgcap_images_processed_total{status="error"}[5m]))
+            / sum(rate(imgcap_images_processed_total[5m])) > 0.2
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 20% of images are failing"
+          description: "Error ratio is {{ $value | humanizePercentage }}."
+
+      # Generated for: "alert when a bulk ZIP job stops making progress"
+      # Logic: queue gauge is non-zero AND changes() counted 0 value changes in the
+      #        last 2 min -> the countdown is frozen.
+      - alert: BulkJobStuck
+        expr: imgcap_bulk_queue_remaining > 0 and changes(imgcap_bulk_queue_remaining[2m]) == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Bulk ZIP job is not making progress"
+          description: "{{ $value }} images have been waiting for over 2 minutes."
+
+  - name: node
+    rules:
+      # Generated for: "alert when node_exporter is down"
+      - alert: NodeExporterDown
+        expr: up{job="node"} == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "node_exporter is down"
+          description: "System metrics are missing from {{ $labels.instance }}."
+
+      # Generated for: "alert when machine CPU is above 90% for a minute"
+      # Logic: node_cpu_seconds_total{mode="idle"} grows by ~1 s per second per core
+      #        when the core is idle. rate() = idle fraction of each core (0..1),
+      #        avg() over all cores, 1 - idle = busy fraction, x100 = percent.
+      - alert: HighCPUUsage
+        expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[1m]))) > 90
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU usage above 90%"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}% for over a minute."
+
+      # Generated for: "alert when less than 10% RAM is available"
+      # Logic: MemAvailable / MemTotal x 100.
+      - alert: LowMemory
+        expr: 100 * node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Less than 10% RAM available"
+          description: "Only {{ $value | printf \"%.1f\" }}% memory is available."
+
+      # Generated for: "alert when the root disk is almost full"
+      # Regex: fstype!~"tmpfs|overlay" drops RAM-backed (tmpfs) and docker overlay
+      #        filesystems so only the real disk mounted at / is used.
+      # Logic: available bytes / size bytes x 100.
+      - alert: DiskAlmostFull
+        expr: 100 * node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} < 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Root disk almost full"
+          description: "Only {{ $value | printf \"%.1f\" }}% disk space left."

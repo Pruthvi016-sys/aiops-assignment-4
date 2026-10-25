@@ -1,0 +1,43 @@
+# Scrape + alerting config. Written with help from Claude (claude-opus-5-5);
+# no complex PromQL/regex here. AI-generated queries are commented in
+# alert_rules.yml, AI_prompt_usage.md and METRICS.md.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+  external_labels:
+    project: da3408-image-captioning
+
+rule_files:
+  - alert_rules.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["localhost:9093"]
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Streamlit app metrics (prometheus_client server inside app.py)
+  - job_name: caption_app
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["localhost:8000"]
+        labels:
+          app: streamlit-blip
+          env: local
+
+  # System metrics from node_exporter (CPU / RAM / Disk / Network)
+  - job_name: node
+    static_configs:
+      - targets: ["localhost:9100"]
+        labels:
+          app: streamlit-blip
+          env: local
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["localhost:9093"]
