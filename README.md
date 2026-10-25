@@ -6,8 +6,8 @@ A CPU-only **image captioning** app (Streamlit + `Salesforce/blip-image-captioni
 
 | Video | Link |
 |---|---|
-| 🎥 Demo + explanation (2–5 min) | _add Google Drive link here_ |
-| 🎥 Dashboard recording (~1 min, 5 s refresh) | _add Google Drive link here_ |
+| 🎥 Demo + explanation (2–5 min) | https://drive.google.com/drive/folders/1lDzRMODmdbrGBYzINnjTkw7uwC62lGHI?usp=sharing |
+
 
 ---
 
